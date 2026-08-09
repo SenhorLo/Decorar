@@ -1,0 +1,29 @@
+node_modules/
+.next/
+.next-build/
+out/
+build/
+.DS_Store
+*.pem
+
+# env
+.env
+.env*.local
+
+# banco local (SQLite)
+prisma/*.db
+prisma/*.db-journal
+
+# uploads enviados por usuarios ficam fora do versionamento.
+# A excecao e o catalogo de exemplo em seed/: sao 6 MB que fazem um clone
+# novo ja subir com as fotos dos anuncios, sem depender da API do Openverse.
+public/uploads/*
+!public/uploads/.gitkeep
+!public/uploads/seed/
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# artefatos de ferramentas locais
+.planning/

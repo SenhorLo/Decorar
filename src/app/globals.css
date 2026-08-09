@@ -1,0 +1,217 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ *
+ * Decorar — tokens de design
+ * Paleta quente e editorial: linho, madeira, latão e verde profundo.
+ * ------------------------------------------------------------------ */
+@theme {
+  --color-ink: #16120f;
+  --color-bark: #2b2320;
+  --color-dusk: #7a6e63;
+  --color-mute: #a2968a;
+  --color-linen: #f7f3ec;
+  --color-canvas: #fffdf9;
+  --color-sand: #e6dccc;
+  --color-sand-deep: #d4c6b0;
+  --color-brass: #a47b45;
+  --color-brass-soft: #cbab77;
+  --color-brass-wash: #f2e9db;
+  --color-forest: #1f2e27;
+  --color-forest-soft: #34473e;
+  --color-clay: #b0603c;
+  --color-success: #2f6b4f;
+  --color-danger: #9b3025;
+
+  --font-display: var(--font-fraunces), "Iowan Old Style", Georgia, serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-2xl: 2rem;
+
+  --shadow-soft: 0 1px 2px rgb(22 18 15 / 0.04), 0 8px 24px -12px rgb(22 18 15 / 0.12);
+  --shadow-lift: 0 2px 4px rgb(22 18 15 / 0.05), 0 24px 48px -20px rgb(22 18 15 / 0.22);
+  --shadow-inset-line: inset 0 0 0 1px rgb(230 220 204 / 0.9);
+
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* ------------------------------------------------------------------ *
+ * Base
+ * ------------------------------------------------------------------ */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-linen);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "kern", "liga", "cv05";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  ::selection {
+    background: var(--color-brass-soft);
+    color: var(--color-ink);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brass);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* Tipografia numérica tabular em preços e métricas */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Animações de rolagem
+ * O componente <Reveal> marca data-visible quando entra na viewport.
+ * ------------------------------------------------------------------ */
+@layer components {
+  /* O estado NORMAL é visível — ver o comentário em components/Reveal.tsx.
+     O estado escondido só é aplicado quando o JavaScript marca
+     data-visible="false", o que garante que a página nunca some se algo
+     falhar no cliente. */
+  [data-reveal] {
+    transition:
+      opacity 0.9s var(--ease-out-quint),
+      transform 0.9s var(--ease-out-quint),
+      filter 0.9s var(--ease-out-quint);
+  }
+
+  [data-reveal][data-visible="false"] {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translate3d(0, 28px, 0);
+    will-change: opacity, transform;
+  }
+
+  [data-reveal="left"][data-visible="false"] {
+    transform: translate3d(-36px, 0, 0);
+  }
+
+  [data-reveal="right"][data-visible="false"] {
+    transform: translate3d(36px, 0, 0);
+  }
+
+  [data-reveal="scale"][data-visible="false"] {
+    transform: scale(0.94);
+  }
+
+  /* Textura sutil de papel — dá "peso" físico ao fundo */
+  .grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.4;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.13'/%3E%3C/svg%3E");
+  }
+
+  /* Linha fina decorativa com fade nas pontas */
+  .hairline {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--color-sand-deep) 18%,
+      var(--color-sand-deep) 82%,
+      transparent
+    );
+  }
+
+  .marquee-track {
+    animation: marquee 46s linear infinite;
+  }
+
+  .card-hover {
+    transition:
+      transform 0.5s var(--ease-out-quint),
+      box-shadow 0.5s var(--ease-out-quint);
+  }
+
+  .card-hover:hover {
+    transform: translateY(-6px);
+    box-shadow: var(--shadow-lift);
+  }
+}
+
+@keyframes marquee {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-14px); }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translate3d(0, 16px, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+.animate-float-slow {
+  animation: float-slow 9s var(--ease-in-out-soft) infinite;
+}
+
+.animate-fade-up {
+  animation: fade-up 0.7s var(--ease-out-quint) both;
+}
+
+/* ------------------------------------------------------------------ *
+ * Acessibilidade — respeita quem desativou animações no SO
+ * ------------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  [data-reveal],
+  [data-reveal][data-visible="false"] {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+}
+
+/* Scrollbar discreta */
+@media (pointer: fine) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-sand-deep) transparent;
+  }
+}

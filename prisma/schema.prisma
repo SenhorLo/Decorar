@@ -1,0 +1,125 @@
+// Decorar — marketplace de mobilia e decoracao
+// SQLite para o MVP. Trocar `provider` para "postgresql" nao exige mudanca
+// de modelo: nao usamos enums nativos nem tipos exclusivos do Postgres.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String  @id @default(cuid())
+  name         String
+  email        String  @unique
+  passwordHash String
+  role         String  @default("USER") // USER | ADMIN
+
+  avatarUrl String?
+  phone     String?
+  city      String?
+  state     String?
+  bio       String?
+
+  /// Incrementado em troca de senha / "sair de todos os dispositivos".
+  /// Sessoes com versao antiga sao rejeitadas mesmo com JWT valido.
+  sessionVersion Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store     Store?
+  listings  Listing[]
+  favorites Favorite[]
+}
+
+model Store {
+  id      String @id @default(cuid())
+  ownerId String @unique
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  name        String
+  slug        String  @unique
+  tagline     String?
+  description String?
+  logoUrl     String?
+  coverUrl    String?
+  city        String?
+  state       String?
+  whatsapp    String?
+  instagram   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slug])
+}
+
+model Listing {
+  id       String @id @default(cuid())
+  sellerId String
+  seller   User   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String
+
+  /// Sempre em centavos — nunca float para dinheiro.
+  priceCents         Int
+  originalPriceCents Int?
+
+  category  String // ver src/lib/taxonomy.ts
+  condition String // NOVO | SEMINOVO | USADO | RESTAURADO
+  material  String?
+  color     String?
+  brand     String?
+
+  city  String
+  state String // UF
+
+  status            String  @default("ATIVO") // RASCUNHO | ATIVO | PAUSADO | VENDIDO
+  negotiable        Boolean @default(false)
+  deliveryAvailable Boolean @default(false)
+  views             Int     @default(0)
+
+  /// Titulo + descricao + marca normalizados (minusculo, sem acento).
+  /// Permite busca "sofa" encontrar "Sofá" no SQLite.
+  searchIndex String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  images    ListingImage[]
+  favorites Favorite[]
+
+  @@index([status, createdAt])
+  @@index([status, category])
+  @@index([status, state, city])
+  @@index([sellerId])
+}
+
+model ListingImage {
+  id        String  @id @default(cuid())
+  listingId String
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  url      String
+  alt      String?
+  position Int     @default(0)
+
+  @@index([listingId, position])
+}
+
+model Favorite {
+  userId    String
+  listingId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@id([userId, listingId])
+  @@index([userId, createdAt])
+}

@@ -1,0 +1,13 @@
+# Normaliza quebras de linha no repositorio (LF), independente do SO de quem clona.
+* text=auto eol=lf
+
+# Binarios — nunca converter.
+*.jpg  binary
+*.jpeg binary
+*.png  binary
+*.webp binary
+*.avif binary
+*.ico  binary
+*.woff binary
+*.woff2 binary
+*.db   binary
