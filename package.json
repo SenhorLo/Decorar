@@ -5,22 +5,25 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "prisma generate && prisma migrate deploy && next build",
     "start": "next start",
+    "postinstall": "prisma generate",
     "typecheck": "tsc --noEmit",
-    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "seed:images": "tsx scripts/fetch-seed-images.ts",
     "seed:manifest": "tsx scripts/rebuild-seed-manifest.ts",
-    "db:reset": "prisma db push --force-reset && npm run db:seed",
+    "db:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio",
-    "setup": "prisma generate && prisma db push && npm run db:seed"
+    "setup": "prisma migrate deploy && npm run db:seed"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",
+    "@vercel/blob": "^2.7.0",
     "bcryptjs": "^3.0.2",
     "jose": "^5.9.6",
     "lucide-react": "^0.469.0",

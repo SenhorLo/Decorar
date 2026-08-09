@@ -8,11 +8,18 @@ const isDev = process.env.NODE_ENV !== "production";
  * os styles gerados pelo Tailwind/next-font. Em producao com nonce dinamico
  * isso pode ser endurecido (ver README > Seguranca).
  */
+/**
+ * Em producao as fotos enviadas por usuarios ficam no Vercel Blob, servidas
+ * de um subdominio proprio. Precisa constar na CSP e em `images` — sem isso
+ * o navegador bloqueia e o otimizador do next/image recusa a origem.
+ */
+const BLOB_HOST = "https://*.public.blob.vercel-storage.com";
+
 const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  `img-src 'self' data: blob: ${BLOB_HOST}`,
   "font-src 'self' data:",
   "connect-src 'self'" + (isDev ? " ws: wss:" : ""),
   "object-src 'none'",
@@ -60,6 +67,13 @@ const nextConfig = {
   },
   images: {
     formats: ["image/avif", "image/webp"],
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "*.public.blob.vercel-storage.com",
+        pathname: "/**",
+      },
+    ],
   },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];

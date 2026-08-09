@@ -13,7 +13,7 @@ import {
 } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
-import { saveImage, deleteUpload } from "@/lib/uploads";
+import { saveImage, deleteUpload, isManagedUploadUrl } from "@/lib/uploads";
 import { fieldErrors, passwordChangeSchema, profileSchema } from "@/lib/validators";
 
 export async function updateProfileAction(
@@ -151,7 +151,7 @@ export async function deleteAccountAction(
 
   await Promise.all(
     [...images.map((i) => i.url), user.avatarUrl ?? ""]
-      .filter((u) => u.startsWith("/uploads/"))
+      .filter(isManagedUploadUrl)
       .map(deleteUpload),
   );
 

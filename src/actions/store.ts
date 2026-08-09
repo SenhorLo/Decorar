@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import type { ActionState } from "@/actions/types";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { deleteUpload, saveImage } from "@/lib/uploads";
+import { deleteUpload, isManagedUploadUrl, saveImage } from "@/lib/uploads";
 import { slugify } from "@/lib/utils";
 import { fieldErrors, storeSchema } from "@/lib/validators";
 
@@ -110,7 +110,7 @@ export async function deleteStoreAction(): Promise<void> {
   await prisma.store.delete({ where: { id: store.id } });
   await Promise.all(
     [store.logoUrl, store.coverUrl]
-      .filter((u): u is string => Boolean(u?.startsWith("/uploads/")))
+      .filter((u): u is string => Boolean(u && isManagedUploadUrl(u)))
       .map(deleteUpload),
   );
 

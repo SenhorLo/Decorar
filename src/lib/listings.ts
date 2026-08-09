@@ -79,7 +79,10 @@ export function buildListingWhere(query: SearchQuery): Prisma.ListingWhereInput 
   if (query.categoria) where.category = query.categoria;
   if (query.condicao) where.condition = query.condicao;
   if (query.uf) where.state = query.uf;
-  if (query.cidade) where.city = { contains: query.cidade };
+  // `city` guarda o nome como o vendedor digitou ("Belo Horizonte"), então a
+  // comparação precisa ignorar caixa — no Postgres `contains` é sensível a
+  // maiúsculas, ao contrário do SQLite usado no início do projeto.
+  if (query.cidade) where.city = { contains: query.cidade, mode: "insensitive" };
   if (query.entrega) where.deliveryAvailable = true;
 
   if (query.min !== undefined || query.max !== undefined) {

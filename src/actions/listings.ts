@@ -8,7 +8,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { buildSearchIndex } from "@/lib/listings";
 import { isGeneratedArt } from "@/lib/art";
-import { deleteUpload } from "@/lib/uploads";
+import { deleteUpload, isManagedUploadUrl } from "@/lib/uploads";
 import { parseBRLToCents } from "@/lib/utils";
 import { fieldErrors, listingSchema } from "@/lib/validators";
 import { LISTING_STATUS_VALUES } from "@/lib/taxonomy";
@@ -51,14 +51,12 @@ function echoValues(formData: FormData): Record<string, string> {
 }
 
 /**
- * Só aceita URLs que o próprio servidor gerou: /uploads/... ou uma placa
- * ilustrada. Bloqueia injeção de URL externa (tracking pixel, SSRF de imagem).
+ * Só aceita URLs que o próprio servidor gerou: disco local, Vercel Blob ou
+ * uma placa ilustrada. Bloqueia injeção de URL externa — sem isto daria para
+ * apontar o anúncio para um pixel de rastreamento ou um host arbitrário.
  */
 function sanitizeImages(urls: string[]): string[] {
-  return urls
-    .filter((u) => u.startsWith("/uploads/") || isGeneratedArt(u))
-    .filter((u) => !u.includes(".."))
-    .slice(0, 8);
+  return urls.filter((u) => isManagedUploadUrl(u) || isGeneratedArt(u)).slice(0, 8);
 }
 
 export async function createListingAction(
@@ -177,7 +175,7 @@ export async function updateListingAction(
   // Remove do disco as fotos que saíram do anúncio.
   const removed = current.images
     .map((i) => i.url)
-    .filter((url) => url.startsWith("/uploads/") && !data.images.includes(url));
+    .filter((url) => isManagedUploadUrl(url) && !data.images.includes(url));
   await Promise.all(removed.map(deleteUpload));
 
   revalidatePath("/anuncios");
@@ -204,7 +202,7 @@ export async function deleteListingAction(formData: FormData): Promise<void> {
 
   await prisma.listing.delete({ where: { id } });
   await Promise.all(
-    listing.images.map((i) => i.url).filter((u) => u.startsWith("/uploads/")).map(deleteUpload),
+    listing.images.map((i) => i.url).filter(isManagedUploadUrl).map(deleteUpload),
   );
 
   revalidatePath("/anuncios");

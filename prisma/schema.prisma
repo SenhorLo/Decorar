@@ -1,13 +1,15 @@
 // Decorar — marketplace de mobilia e decoracao
-// SQLite para o MVP. Trocar `provider` para "postgresql" nao exige mudanca
-// de modelo: nao usamos enums nativos nem tipos exclusivos do Postgres.
+//
+// PostgreSQL (Prisma Postgres em producao). Os "enums" sao String validada
+// por Zod em vez de enum nativo: mantem o schema portavel e evita uma
+// migration a cada valor novo de categoria ou situacao de anuncio.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

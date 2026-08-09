@@ -8,6 +8,18 @@ filtros, perfil de usuário e página de loja.
 
 ## Rodando o projeto
 
+O banco é PostgreSQL — em desenvolvimento e em produção. O caminho mais curto
+é criar um banco gratuito no [Prisma Postgres](https://console.prisma.io).
+
+1. Copie `.env.example` para `.env` e cole a sua `DATABASE_URL`.
+2. Gere um `AUTH_SECRET` próprio:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
+```
+
+3. Instale e prepare o banco:
+
 ```bash
 npm install
 ```
@@ -16,8 +28,7 @@ npm install
 npm run setup
 ```
 
-`setup` gera o Prisma Client, cria o banco SQLite e popula com o catálogo de
-exemplo. Depois:
+`setup` aplica as migrations e popula o catálogo de exemplo. Depois:
 
 ```bash
 npm run dev
@@ -42,7 +53,7 @@ Helena e Tomás têm loja; os outros dois vendem como pessoa física.
 | ------------ | -------------------------------- | ----------------------------------------------------------------------------- |
 | Framework    | Next.js 15 (App Router)          | Server Components + Server Actions: mutação sem camada de API para manter      |
 | Linguagem    | TypeScript strict                | Erros de contrato aparecem no editor, não em produção                          |
-| Banco        | Prisma + SQLite                  | Zero infraestrutura para rodar local; migra para Postgres trocando uma linha   |
+| Banco        | Prisma + PostgreSQL              | Prisma Postgres em produção; migrations versionadas em `prisma/migrations/`    |
 | Estilo       | Tailwind CSS v4                  | Tokens de design em `@theme`, sem arquivo de config para manter sincronizado   |
 | Sessão       | `jose` (JWT) + `bcryptjs`        | Compatível com o runtime edge do middleware, sem dependência de serviço externo |
 | Validação    | Zod                              | Um schema serve para o formulário e para a Server Action                       |
@@ -51,14 +62,45 @@ Helena e Tomás têm loja; os outros dois vendem como pessoa física.
 Nenhum serviço externo é necessário — o projeto sobe offline depois do
 `npm install`.
 
-### Migrando para PostgreSQL
+---
 
-1. Em `prisma/schema.prisma`, troque `provider = "sqlite"` por `"postgresql"`.
-2. Aponte `DATABASE_URL` para o banco.
-3. `npx prisma db push`.
+## Deploy na Vercel
 
-O schema não usa enums nativos nem tipos exclusivos do SQLite, então não há
-nada além disso a ajustar.
+### 1. Variáveis de ambiente
+
+Defina **antes do primeiro deploy** — o script de build roda
+`prisma migrate deploy`, que precisa do banco já na etapa de build.
+
+| Variável              | Valor                                              |
+| --------------------- | -------------------------------------------------- |
+| `DATABASE_URL`        | Connection string do Prisma Postgres                |
+| `AUTH_SECRET`         | **Chave nova**, diferente da usada em desenvolvimento |
+| `NEXT_PUBLIC_APP_URL` | `https://seu-projeto.vercel.app`                    |
+
+### 2. Armazenamento das imagens
+
+No painel do projeto: **Storage → Create → Blob**. Conectar o store injeta
+`BLOB_READ_WRITE_TOKEN` automaticamente. Sem essa variável o código tenta
+gravar em disco, e o sistema de arquivos da Vercel é somente-leitura — todo
+upload falharia.
+
+### 3. Migrations
+
+Rodam sozinhas a cada deploy (`prisma migrate deploy` no script de `build`).
+Não é preciso rodar nada à mão no painel do Prisma.
+
+### 4. Popular o catálogo de exemplo (opcional)
+
+O seed não roda no deploy. Para carregar os anúncios de demonstração no banco
+de produção, aponte o `.env` local para a `DATABASE_URL` de produção e rode:
+
+```bash
+npm run db:seed
+```
+
+> As fotos do seed são arquivos versionados em `public/uploads/seed/`, então
+> são servidas normalmente pela Vercel. Só os uploads feitos por usuários
+> passam pelo Blob.
 
 ---
 
@@ -118,12 +160,12 @@ CSP, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`,
 
 ### O que falta para produção
 
-- **Rate limit em memória.** Funciona em instância única. Com múltiplas
-  instâncias, trocar o `Map` por Redis mantendo a mesma assinatura.
+- **Rate limit em memória.** Cada instância serverless tem o próprio contador,
+  então na Vercel o limite efetivo é maior que o configurado. Ainda barra
+  força bruta ingênua, mas para valer é preciso trocar o `Map` por Redis
+  (Upstash) — a assinatura de `src/lib/rate-limit.ts` já isola isso.
 - **CSP com `unsafe-inline`.** Necessário para o bootstrap do Next; endurecer
   com nonce por requisição.
-- **Uploads em disco local.** Em ambiente serverless (Vercel), migrar para
-  S3/R2 — só `src/lib/uploads.ts` muda.
 - **Sem verificação de e-mail nem recuperação de senha.**
 - **Sem pagamento.** A negociação é direta entre as partes, por WhatsApp.
 

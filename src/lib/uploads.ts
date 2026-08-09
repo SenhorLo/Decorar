@@ -4,10 +4,21 @@ import { randomUUID } from "node:crypto";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { del, put } from "@vercel/blob";
+
 export const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
 export const MAX_FILES_PER_LISTING = 8;
 
 const UPLOAD_ROOT = path.join(process.cwd(), "public", "uploads");
+
+/**
+ * Em produção (Vercel) o sistema de arquivos é somente-leitura e efêmero:
+ * gravar em public/ falha, e o que fosse gravado sumiria no próximo deploy.
+ * Com o token presente usamos o Vercel Blob; sem ele, disco local — assim o
+ * desenvolvimento continua funcionando offline, sem conta nem token.
+ */
+const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
+const useBlob = Boolean(BLOB_TOKEN);
 
 type Signature = { ext: string; mime: string; test: (b: Uint8Array) => boolean };
 
@@ -67,28 +78,58 @@ export async function saveImage(file: File): Promise<SaveResult> {
     };
   }
 
-  // Nome gerado pelo servidor: o nome enviado pelo cliente nunca toca o disco.
+  // Nome gerado pelo servidor: o nome enviado pelo cliente nunca vira caminho.
   const now = new Date();
-  const folder = path.join(
-    UPLOAD_ROOT,
-    String(now.getFullYear()),
-    String(now.getMonth() + 1).padStart(2, "0"),
-  );
-  await mkdir(folder, { recursive: true });
-
+  const folder = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}`;
   const filename = `${randomUUID()}.${signature.ext}`;
-  await writeFile(path.join(folder, filename), bytes);
 
-  const url = `/uploads/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${filename}`;
-  return { ok: true, url };
+  if (useBlob) {
+    try {
+      const blob = await put(`uploads/${folder}/${filename}`, Buffer.from(bytes), {
+        access: "public",
+        contentType: signature.mime,
+        token: BLOB_TOKEN,
+        // O nome já é um UUID; sufixo aleatório extra só sujaria a URL.
+        addRandomSuffix: false,
+      });
+      return { ok: true, url: blob.url };
+    } catch {
+      return { ok: false, error: "Não foi possível salvar a imagem. Tente de novo." };
+    }
+  }
+
+  const dir = path.join(UPLOAD_ROOT, folder);
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, filename), bytes);
+
+  return { ok: true, url: `/uploads/${folder}/${filename}` };
+}
+
+/** Hosts de onde uma imagem de anúncio pode ter vindo. */
+export function isBlobUrl(url: string): boolean {
+  return /^https:\/\/[a-z0-9-]+\.public\.blob\.vercel-storage\.com\//i.test(url);
+}
+
+export function isLocalUploadUrl(url: string): boolean {
+  return url.startsWith("/uploads/") && !url.includes("..");
+}
+
+/** Aceita apenas URLs que o próprio servidor gerou. */
+export function isManagedUploadUrl(url: string): boolean {
+  return isLocalUploadUrl(url) || isBlobUrl(url);
 }
 
 /**
- * Remove um arquivo enviado. Só aceita URLs sob /uploads/ e resolve o caminho
- * para garantir que nao escape do diretorio (path traversal).
+ * Remove um arquivo enviado. Só aceita URLs que nós geramos, e no caso local
+ * resolve o caminho para garantir que não escape do diretório (path traversal).
  */
 export async function deleteUpload(url: string): Promise<void> {
-  if (!url.startsWith("/uploads/")) return;
+  if (isBlobUrl(url)) {
+    await del(url, { token: BLOB_TOKEN }).catch(() => undefined);
+    return;
+  }
+
+  if (!isLocalUploadUrl(url)) return;
 
   const target = path.resolve(path.join(process.cwd(), "public", url));
   if (!target.startsWith(path.resolve(UPLOAD_ROOT) + path.sep)) return;
