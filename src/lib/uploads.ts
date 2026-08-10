@@ -6,6 +6,8 @@ import path from "node:path";
 
 import { del, put } from "@vercel/blob";
 
+import { isBlobUrl, isLocalUploadUrl } from "@/lib/upload-urls";
+
 /**
  * 4 MB, nao 5.
  *
@@ -140,19 +142,7 @@ export async function saveImage(file: File): Promise<SaveResult> {
   return { ok: true, url: `/uploads/${folder}/${filename}` };
 }
 
-/** Hosts de onde uma imagem de anúncio pode ter vindo. */
-export function isBlobUrl(url: string): boolean {
-  return /^https:\/\/[a-z0-9-]+\.public\.blob\.vercel-storage\.com\//i.test(url);
-}
-
-export function isLocalUploadUrl(url: string): boolean {
-  return url.startsWith("/uploads/") && !url.includes("..");
-}
-
-/** Aceita apenas URLs que o próprio servidor gerou. */
-export function isManagedUploadUrl(url: string): boolean {
-  return isLocalUploadUrl(url) || isBlobUrl(url);
-}
+export { isBlobUrl, isLocalUploadUrl, isManagedUploadUrl } from "@/lib/upload-urls";
 
 /**
  * Remove um arquivo enviado. Só aceita URLs que nós geramos, e no caso local

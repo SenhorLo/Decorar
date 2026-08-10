@@ -54,9 +54,36 @@ function echoValues(formData: FormData): Record<string, string> {
  * Só aceita URLs que o próprio servidor gerou: disco local, Vercel Blob ou
  * uma placa ilustrada. Bloqueia injeção de URL externa — sem isto daria para
  * apontar o anúncio para um pixel de rastreamento ou um host arbitrário.
+ *
+ * Devolve os descartados junto: se todas as imagens caírem aqui, o usuário
+ * receberia "envie pelo menos uma imagem" — uma mensagem que culpa quem
+ * acabou de enviar as fotos e esconde que o problema é de configuração.
  */
-function sanitizeImages(urls: string[]): string[] {
-  return urls.filter((u) => isManagedUploadUrl(u) || isGeneratedArt(u)).slice(0, 8);
+function sanitizeImages(urls: string[]): { aceitas: string[]; recusadas: string[] } {
+  const aceitas: string[] = [];
+  const recusadas: string[] = [];
+
+  for (const url of urls) {
+    if (isManagedUploadUrl(url) || isGeneratedArt(url)) aceitas.push(url);
+    else recusadas.push(url);
+  }
+
+  return { aceitas: aceitas.slice(0, 8), recusadas };
+}
+
+/** Erro comum a criar e editar quando as imagens enviadas foram recusadas. */
+function erroDeImagensRecusadas(recusadas: string[]): ActionState {
+  console.error(
+    "[listings] URLs de imagem recusadas pela validação de origem:",
+    recusadas.map((u) => u.slice(0, 120)),
+  );
+
+  return {
+    error:
+      "As imagens enviadas vieram de uma origem que o servidor não reconhece, " +
+      "então o anúncio não foi salvo. Isso costuma ser configuração do " +
+      "armazenamento — o endereço recusado ficou registrado no log do servidor.",
+  };
 }
 
 export async function createListingAction(
@@ -67,7 +94,12 @@ export async function createListingAction(
   if (!user) redirect("/login?next=/anuncios/novo");
 
   const raw = readListingForm(formData);
-  raw.images = sanitizeImages(raw.images);
+  const imagens = sanitizeImages(raw.images);
+  raw.images = imagens.aceitas;
+
+  if (imagens.aceitas.length === 0 && imagens.recusadas.length > 0) {
+    return { ...erroDeImagensRecusadas(imagens.recusadas), values: echoValues(formData) };
+  }
 
   const parsed = listingSchema.safeParse(raw);
   if (!parsed.success) {
@@ -132,7 +164,12 @@ export async function updateListingAction(
   }
 
   const raw = readListingForm(formData);
-  raw.images = sanitizeImages(raw.images);
+  const imagens = sanitizeImages(raw.images);
+  raw.images = imagens.aceitas;
+
+  if (imagens.aceitas.length === 0 && imagens.recusadas.length > 0) {
+    return { ...erroDeImagensRecusadas(imagens.recusadas), values: echoValues(formData) };
+  }
 
   const parsed = listingSchema.safeParse(raw);
   if (!parsed.success) {

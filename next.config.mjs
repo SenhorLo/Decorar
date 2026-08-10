@@ -13,7 +13,7 @@ const isDev = process.env.NODE_ENV !== "production";
  * de um subdominio proprio. Precisa constar na CSP e em `images` — sem isso
  * o navegador bloqueia e o otimizador do next/image recusa a origem.
  */
-const BLOB_HOST = "https://*.public.blob.vercel-storage.com";
+const BLOB_HOST = "https://*.blob.vercel-storage.com https://*.public.blob.vercel-storage.com";
 
 const csp = [
   "default-src 'self'",
@@ -70,9 +70,11 @@ const nextConfig = {
   images: {
     formats: ["image/avif", "image/webp"],
     remotePatterns: [
+      // `**` cobre tanto <id>.blob... quanto <id>.public.blob..., que sao os
+      // dois formatos que o Vercel Blob usa conforme o modo do store.
       {
         protocol: "https",
-        hostname: "*.public.blob.vercel-storage.com",
+        hostname: "**.blob.vercel-storage.com",
         pathname: "/**",
       },
     ],
