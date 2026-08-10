@@ -25,9 +25,34 @@ export function ImageUploader({
 }) {
   const [urls, setUrls] = useState<string[]>(initial);
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * Lê a resposta sem assumir que ela é JSON.
+   *
+   * Quando o servidor devolve 413 (corpo grande demais) ou 500, o corpo vem
+   * em HTML — e um `response.json()` direto explodiria, fazendo qualquer falha
+   * do servidor parecer queda de conexão.
+   */
+  async function readError(response: Response): Promise<string> {
+    const texto = await response.text().catch(() => "");
+
+    try {
+      const json = JSON.parse(texto) as { error?: string };
+      if (json.error) return json.error;
+    } catch {
+      // corpo não era JSON — segue para as mensagens por status
+    }
+
+    if (response.status === 401) return "Sua sessão expirou. Entre de novo para enviar fotos.";
+    if (response.status === 413) return "A imagem é grande demais para o servidor.";
+    if (response.status === 429) return "Muitos envios seguidos. Aguarde alguns minutos.";
+
+    return `O servidor recusou o envio (erro ${response.status}).`;
+  }
 
   async function upload(files: FileList | File[]) {
     const list = Array.from(files);
@@ -39,28 +64,44 @@ export function ImageUploader({
       return;
     }
 
+    const fila = list.slice(0, room);
     setUploading(true);
     setMessage(null);
 
-    const body = new FormData();
-    for (const file of list.slice(0, room)) body.append("files", file);
+    // Um arquivo por requisição: o limite de corpo de uma Vercel Function é
+    // ~4,5 MB, então mandar as oito imagens juntas estouraria o teto.
+    for (const [indice, file] of fila.entries()) {
+      setProgress(fila.length > 1 ? `Enviando ${indice + 1} de ${fila.length}…` : "Enviando…");
 
-    try {
-      const response = await fetch("/api/uploads", { method: "POST", body });
-      const data = (await response.json()) as { urls?: string[]; error?: string };
+      const body = new FormData();
+      body.append("files", file);
 
-      if (!response.ok || !data.urls) {
-        setMessage(data.error ?? "Não foi possível enviar as imagens.");
-        return;
+      try {
+        const response = await fetch("/api/uploads", { method: "POST", body });
+
+        if (!response.ok) {
+          setMessage(await readError(response));
+          break;
+        }
+
+        const data = (await response.json()) as { urls?: string[]; error?: string };
+        if (!data.urls?.length) {
+          setMessage(data.error ?? "O servidor não devolveu a imagem enviada.");
+          break;
+        }
+
+        setUrls((current) => [...current, ...data.urls!].slice(0, MAX_IMAGES));
+      } catch {
+        setMessage(
+          "Não foi possível falar com o servidor. Verifique sua conexão e tente de novo.",
+        );
+        break;
       }
-
-      setUrls((current) => [...current, ...data.urls!].slice(0, MAX_IMAGES));
-    } catch {
-      setMessage("Falha de conexão ao enviar as imagens.");
-    } finally {
-      setUploading(false);
-      if (inputRef.current) inputRef.current.value = "";
     }
+
+    setUploading(false);
+    setProgress(null);
+    if (inputRef.current) inputRef.current.value = "";
   }
 
   function remove(index: number) {
@@ -114,7 +155,7 @@ export function ImageUploader({
         {uploading ? (
           <p className="flex items-center justify-center gap-2 py-3 text-sm text-dusk">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            Enviando…
+            {progress ?? "Enviando…"}
           </p>
         ) : (
           <>
@@ -126,7 +167,7 @@ export function ImageUploader({
               Escolher fotos
             </label>
             <p className="mt-1.5 text-[0.75rem] text-dusk">
-              ou arraste aqui · JPG, PNG, WebP ou AVIF · até 5 MB cada · máximo{" "}
+              ou arraste aqui · JPG, PNG, WebP ou AVIF · até 4 MB cada · máximo{" "}
               {MAX_IMAGES}
             </p>
           </>

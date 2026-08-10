@@ -6,7 +6,16 @@ import path from "node:path";
 
 import { del, put } from "@vercel/blob";
 
-export const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
+/**
+ * 4 MB, nao 5.
+ *
+ * Uma Vercel Function aceita no maximo ~4,5 MB de corpo na requisicao. Como o
+ * arquivo passa pelo servidor antes de ir para o Blob, o limite da plataforma
+ * e o teto real — e um 413 ali chega ao cliente como HTML, nao JSON.
+ * O cliente tambem envia um arquivo por requisicao, para o total nunca somar.
+ */
+export const MAX_FILE_BYTES = 4 * 1024 * 1024;
+export const MAX_FILE_MB = 4;
 export const MAX_FILES_PER_LISTING = 8;
 
 const UPLOAD_ROOT = path.join(process.cwd(), "public", "uploads");
@@ -19,6 +28,13 @@ const UPLOAD_ROOT = path.join(process.cwd(), "public", "uploads");
  */
 const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
 const useBlob = Boolean(BLOB_TOKEN);
+
+/**
+ * Na Vercel o disco e somente-leitura. Sem o Blob conectado, tentar gravar
+ * lanca EROFS e o usuario recebe um erro generico de rede — melhor detectar
+ * a configuracao faltando e dizer exatamente o que fazer.
+ */
+const isServerless = Boolean(process.env.VERCEL);
 
 type Signature = { ext: string; mime: string; test: (b: Uint8Array) => boolean };
 
@@ -64,7 +80,11 @@ export async function saveImage(file: File): Promise<SaveResult> {
   if (!file || file.size === 0) return { ok: false, error: "Arquivo vazio." };
 
   if (file.size > MAX_FILE_BYTES) {
-    return { ok: false, error: `"${file.name}" passa de 5 MB.` };
+    const mb = (file.size / 1024 / 1024).toFixed(1);
+    return {
+      ok: false,
+      error: `"${file.name}" tem ${mb} MB e o limite é ${MAX_FILE_MB} MB.`,
+    };
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -93,9 +113,24 @@ export async function saveImage(file: File): Promise<SaveResult> {
         addRandomSuffix: false,
       });
       return { ok: true, url: blob.url };
-    } catch {
+    } catch (error) {
+      console.error("[uploads] falha ao gravar no Vercel Blob:", error);
       return { ok: false, error: "Não foi possível salvar a imagem. Tente de novo." };
     }
+  }
+
+  // Sem Blob em ambiente serverless não há onde gravar. Falhar aqui, com o
+  // motivo exato, evita um EROFS disfarçado de erro de conexão.
+  if (isServerless) {
+    console.error(
+      "[uploads] BLOB_READ_WRITE_TOKEN ausente em ambiente serverless — conecte um Blob Store ao projeto.",
+    );
+    return {
+      ok: false,
+      error:
+        "O armazenamento de imagens não está configurado neste ambiente. " +
+        "Conecte um Blob Store ao projeto na Vercel (Storage → Blob).",
+    };
   }
 
   const dir = path.join(UPLOAD_ROOT, folder);

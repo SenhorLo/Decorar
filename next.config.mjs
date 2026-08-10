@@ -61,8 +61,10 @@ const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || ".next",
   experimental: {
     serverActions: {
-      // Uploads passam por Server Actions: 6 imagens x 5MB + folga.
-      bodySizeLimit: "32mb",
+      // Avatar e capa de loja sobem por Server Action; as fotos de anúncio
+      // vão pela Route Handler /api/uploads. Na Vercel o teto real é ~4,5 MB
+      // por requisição, independente deste valor.
+      bodySizeLimit: "8mb",
     },
   },
   images: {

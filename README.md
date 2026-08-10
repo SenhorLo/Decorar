@@ -139,7 +139,10 @@ Cada item abaixo está implementado, não é planejamento.
 
 - Tipo verificado por *magic bytes*, não pelo `Content-Type` do cliente — SVG
   com script embutido e executável renomeado são recusados.
-- Limite de 5 MB por arquivo e 8 por anúncio.
+- Limite de 4 MB por arquivo e 8 por anúncio. O teto vem da plataforma: uma
+  Vercel Function aceita ~4,5 MB de corpo, e o arquivo passa pelo servidor
+  antes de ir para o Blob. Por isso o cliente envia **uma imagem por
+  requisição** — mandar as oito juntas estouraria o limite.
 - Nome do arquivo é um UUID gerado pelo servidor: o nome enviado pelo cliente
   nunca toca o disco.
 - Ao remover uma imagem do anúncio, o arquivo é apagado (com o caminho
