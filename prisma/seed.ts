@@ -425,7 +425,49 @@ const LISTINGS: SeedListing[][] = [
   ],
 ];
 
+/**
+ * O seed apaga tudo antes de popular. Isso é inofensivo num banco de
+ * desenvolvimento e destrutivo num banco com contas reais — e a mesma
+ * DATABASE_URL costuma acabar apontando para produção em algum momento.
+ *
+ * Aqui contamos usuários que não são do seed. Se houver algum, o script para
+ * e exige `--force`, para que apagar dados de gente de verdade seja sempre
+ * uma decisão explícita, nunca um efeito colateral de rodar `npm run setup`.
+ */
+async function protegerDadosReais() {
+  const forcado = process.argv.includes("--force");
+
+  const reais = await prisma.user.count({
+    where: { email: { notIn: SELLERS.map((s) => s.email) } },
+  });
+
+  if (reais === 0 || forcado) {
+    if (reais > 0) {
+      console.warn(`⚠ --force: apagando ${reais} conta(s) que não são do seed.`);
+    }
+    return;
+  }
+
+  console.error(
+    [
+      "",
+      `✗ Este banco tem ${reais} conta(s) fora do seed — provavelmente é produção.`,
+      "",
+      "  O seed apaga usuários, anúncios, lojas e favoritos antes de popular.",
+      "  Se você realmente quer descartar esses dados, rode:",
+      "",
+      "      npx tsx prisma/seed.ts --force",
+      "",
+    ].join("\n"),
+  );
+
+  await prisma.$disconnect();
+  process.exit(1);
+}
+
 async function main() {
+  await protegerDadosReais();
+
   const photos = await loadPhotos();
 
   console.log("→ Limpando dados anteriores…");

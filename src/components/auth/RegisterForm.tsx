@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { Check, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 
 import { registerAction } from "@/actions/auth";
 import { emptyState } from "@/actions/types";
+import { PasswordRules } from "@/components/auth/PasswordRules";
 import { Button } from "@/components/ui/button";
 import { Checkbox, Field, FormError, Input } from "@/components/ui/form";
-import { cn } from "@/lib/utils";
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -20,31 +20,6 @@ function SubmitButton() {
   );
 }
 
-/** Requisitos exibidos em tempo real — evita erro só depois do submit. */
-function PasswordRules({ value }: { value: string }) {
-  const rules = [
-    { label: "8 caracteres ou mais", ok: value.length >= 8 },
-    { label: "Ao menos uma letra", ok: /[a-zA-Z]/.test(value) },
-    { label: "Ao menos um número", ok: /[0-9]/.test(value) },
-  ];
-
-  return (
-    <ul className="mt-2 grid gap-1.5 sm:grid-cols-3">
-      {rules.map((rule) => (
-        <li
-          key={rule.label}
-          className={cn(
-            "flex items-center gap-1.5 text-[0.6875rem] transition-colors",
-            rule.ok ? "text-success" : "text-mute",
-          )}
-        >
-          <Check className={cn("h-3 w-3 shrink-0", !rule.ok && "opacity-35")} aria-hidden="true" />
-          {rule.label}
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 export function RegisterForm() {
   const [state, formAction] = useActionState(registerAction, emptyState);

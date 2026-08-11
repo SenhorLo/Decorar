@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import {
@@ -9,6 +9,7 @@ import {
   updateProfileAction,
 } from "@/actions/profile";
 import { emptyState } from "@/actions/types";
+import { PasswordRules } from "@/components/auth/PasswordRules";
 import { Button } from "@/components/ui/button";
 import { Field, FormError, FormSuccess, Input, Select, Textarea } from "@/components/ui/form";
 import { UFS } from "@/lib/taxonomy";
@@ -95,6 +96,7 @@ export function ProfileForm({
 
 export function PasswordForm() {
   const [state, formAction] = useActionState(changePasswordAction, emptyState);
+  const [novaSenha, setNovaSenha] = useState("");
 
   return (
     <form action={formAction} className="space-y-5" noValidate>
@@ -122,7 +124,6 @@ export function PasswordForm() {
           label="Nova senha"
           htmlFor="newPassword"
           error={state.fieldErrors?.newPassword}
-          hint="Mínimo de 8 caracteres, com letra e número."
           required
         >
           <Input
@@ -131,8 +132,11 @@ export function PasswordForm() {
             type="password"
             autoComplete="new-password"
             required
+            value={novaSenha}
+            onChange={(e) => setNovaSenha(e.target.value)}
             invalid={Boolean(state.fieldErrors?.newPassword)}
           />
+          <PasswordRules value={novaSenha} />
         </Field>
 
         <Field

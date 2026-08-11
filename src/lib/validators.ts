@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { checkPassword, PASSWORD_MAX } from "@/lib/password";
 import {
   CATEGORY_SLUGS,
   CONDITION_VALUES,
@@ -17,12 +18,25 @@ export const emailSchema = z
   .max(160, "E-mail muito longo")
   .email("E-mail inválido");
 
+/**
+ * A política vive em `@/lib/password` e é a mesma que o formulário mostra em
+ * tempo real. Aqui ela vira uma mensagem só: listar cinco erros de uma vez
+ * num campo é ruído — a interface já indica item por item o que falta.
+ */
 export const passwordSchema = z
   .string()
-  .min(8, "A senha precisa de pelo menos 8 caracteres")
-  .max(72, "A senha pode ter no máximo 72 caracteres") // limite do bcrypt
-  .refine((v) => /[a-zA-Z]/.test(v), "Inclua ao menos uma letra")
-  .refine((v) => /[0-9]/.test(v), "Inclua ao menos um número");
+  .max(PASSWORD_MAX, `A senha pode ter no máximo ${PASSWORD_MAX} caracteres`)
+  .superRefine((value, ctx) => {
+    const check = checkPassword(value);
+    if (check.ok) return;
+
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        check.fraca ??
+        `A senha precisa de: ${check.faltando.map((r) => r.label.toLowerCase()).join(", ")}.`,
+    });
+  });
 
 export const registerSchema = z
   .object({
