@@ -87,20 +87,19 @@ export async function loginAction(
   const ip = await clientIp();
   const emailKey = raw.email.trim().toLowerCase();
 
-  // Dois limites: por IP (bloqueia varredura) e por e-mail (bloqueia
-  // força bruta distribuída contra uma conta específica).
-  for (const key of [`login:ip:${ip}`, `login:email:${emailKey}`]) {
-    const limit = rateLimit(key, {
-      limit: 8,
-      windowMs: 15 * 60 * 1000,
-      blockMs: 15 * 60 * 1000,
-    });
-    if (!limit.ok) {
-      return {
-        error: `Muitas tentativas. Aguarde ${Math.ceil(limit.retryAfter / 60)} min e tente de novo.`,
-        values,
-      };
-    }
+  // Limite por IP: barra varredura e força bruta vinda de um ponto só.
+  // É aplicado antes de tudo porque não depende de qual conta está sendo
+  // tentada — não dá para um atacante usá-lo contra uma vítima específica.
+  const ipLimit = rateLimit(`login:ip:${ip}`, {
+    limit: 8,
+    windowMs: 15 * 60 * 1000,
+    blockMs: 15 * 60 * 1000,
+  });
+  if (!ipLimit.ok) {
+    return {
+      error: `Muitas tentativas. Aguarde ${Math.ceil(ipLimit.retryAfter / 60)} min e tente de novo.`,
+      values,
+    };
   }
 
   const parsed = loginSchema.safeParse(raw);
@@ -113,20 +112,43 @@ export async function loginAction(
     select: { id: true, role: true, sessionVersion: true, passwordHash: true },
   });
 
-  if (!user) {
-    // Gasta o mesmo tempo de um bcrypt real para não revelar se o e-mail existe.
-    await fakePasswordCheck(parsed.data.password);
-    return { error: "E-mail ou senha incorretos.", values };
-  }
+  // Gasta o mesmo tempo de um bcrypt real quando o e-mail não existe, para o
+  // tempo de resposta não revelar quais e-mails têm conta.
+  const valid = user
+    ? await verifyPassword(parsed.data.password, user.passwordHash)
+    : (await fakePasswordCheck(parsed.data.password), false);
 
-  const valid = await verifyPassword(parsed.data.password, user.passwordHash);
+  /**
+   * O limite por e-mail só é consumido quando a tentativa falha.
+   *
+   * Antes ele era cobrado no início, o que permitia negação de serviço
+   * dirigida: bastava conhecer o e-mail de alguém, errar a senha oito vezes e
+   * a conta ficava inacessível por quinze minutos — para o dono também, que
+   * não tinha feito nada. Verificando a senha primeiro, quem sabe a senha
+   * correta entra sempre; o contador só atrasa quem está adivinhando.
+   */
   if (!valid) {
+    const emailLimit = rateLimit(`login:email:${emailKey}`, {
+      limit: 10,
+      windowMs: 15 * 60 * 1000,
+      blockMs: 10 * 60 * 1000,
+    });
+
+    // Mensagem idêntica para conta existente e inexistente: o contador roda
+    // para qualquer e-mail digitado, então não revela quem tem cadastro.
+    if (!emailLimit.ok) {
+      return {
+        error: "Muitas tentativas de login. Aguarde alguns minutos e tente de novo.",
+        values,
+      };
+    }
+
     return { error: "E-mail ou senha incorretos.", values };
   }
 
   resetRateLimit(`login:ip:${ip}`);
   resetRateLimit(`login:email:${emailKey}`);
-  await startSession(user);
+  await startSession(user!);
 
   redirect(nextPath);
 }

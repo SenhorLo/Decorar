@@ -25,6 +25,15 @@ import { discountPercent, formatBRL, formatRelativeDate } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Nada de telefone ou WhatsApp aqui.
+ *
+ * O resultado desta consulta é serializado no payload RSC da página — o que
+ * for selecionado fica legível no código-fonte para quem abrir o anúncio,
+ * mesmo que nenhum componente renderize o campo. Contato é dado pessoal de
+ * terceiro e só sai pela ação `revealContactAction`, que exige sessão e tem
+ * limite por usuário.
+ */
 async function getListing(id: string) {
   return prisma.listing.findUnique({
     where: { id },
@@ -34,18 +43,27 @@ async function getListing(id: string) {
         select: {
           id: true,
           name: true,
-          phone: true,
           city: true,
           state: true,
           bio: true,
           createdAt: true,
           store: {
-            select: { name: true, slug: true, tagline: true, whatsapp: true },
+            select: { name: true, slug: true, tagline: true },
           },
         },
       },
     },
   });
+}
+
+/** Existe contato? Devolve só o booleano — o número nunca entra no render. */
+async function sellerHasContact(sellerId: string): Promise<boolean> {
+  const contato = await prisma.user.findUnique({
+    where: { id: sellerId },
+    select: { phone: true, store: { select: { whatsapp: true } } },
+  });
+
+  return Boolean(contato?.phone || contato?.store?.whatsapp);
 }
 
 export async function generateMetadata({
@@ -100,6 +118,8 @@ export default async function ListingPage({
         }),
       )
     : false;
+
+  const temContato = await sellerHasContact(listing.sellerId);
 
   const related = await prisma.listing.findMany({
     where: {
@@ -234,11 +254,16 @@ export default async function ListingPage({
                   Editar meu anúncio
                 </Link>
               ) : (
+                /* O número não é passado como prop: props de client component
+                   viajam no payload da página e ficariam no código-fonte. Só
+                   informamos SE existe contato; o valor vem de uma ação
+                   autenticada e limitada, depois do clique. */
                 <ContactSeller
-                  phone={listing.seller.phone}
-                  whatsapp={store?.whatsapp ?? null}
                   sellerName={listing.seller.name}
                   listingTitle={listing.title}
+                  listingId={listing.id}
+                  isAuthenticated={Boolean(user)}
+                  hasContact={temContato}
                 />
               )}
 
