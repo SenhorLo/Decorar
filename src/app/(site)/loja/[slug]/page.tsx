@@ -39,9 +39,28 @@ export default async function LojaPage({
 }) {
   const [{ slug }, user] = await Promise.all([params, getCurrentUser()]);
 
+  /**
+   * `select` explícito em vez de `include`.
+   *
+   * `include` traria todos os campos da loja, inclusive `whatsapp`. Hoje o
+   * número não chega ao navegador porque nada aqui o renderiza nem o repassa
+   * a componente cliente — mas isso é uma garantia por acidente: bastaria
+   * alguém passar `store` inteiro a um componente cliente para o telefone
+   * aparecer no código-fonte desta página pública. Listando os campos, o
+   * dado sensível nunca entra na consulta.
+   */
   const store = await prisma.store.findUnique({
     where: { slug },
-    include: {
+    select: {
+      id: true,
+      ownerId: true,
+      name: true,
+      slug: true,
+      tagline: true,
+      description: true,
+      city: true,
+      state: true,
+      instagram: true,
       owner: { select: { id: true, name: true, bio: true, createdAt: true } },
     },
   });

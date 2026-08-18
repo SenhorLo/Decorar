@@ -20,6 +20,7 @@ import { buttonStyles } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { listingCardSelect } from "@/lib/listings";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { categoryLabel, conditionLabel, statusLabel } from "@/lib/taxonomy";
 import { discountPercent, formatBRL, formatRelativeDate } from "@/lib/utils";
 
@@ -102,12 +103,29 @@ export default async function ListingPage({
   // Rascunho e pausado só aparecem para o dono (e para admin).
   if (listing.status !== "ATIVO" && !isOwner && !isAdmin) notFound();
 
-  // Visualizações não contam o próprio dono.
+  /**
+   * Visualizações não contam o próprio dono, e contam no máximo uma vez por
+   * hora vindas do mesmo IP.
+   *
+   * Sem o segundo limite, recarregar a página em looping inflaria o contador
+   * — e como a busca oferece a ordenação "Mais vistos", isso não seria só uma
+   * métrica errada: seria uma forma barata de empurrar o próprio anúncio para
+   * o topo dos resultados.
+   */
   if (!isOwner) {
-    await prisma.listing.update({
-      where: { id },
-      data: { views: { increment: 1 } },
+    const ip = await clientIp();
+    const primeiraVisita = rateLimit(`view:${id}:${ip}`, {
+      limit: 1,
+      windowMs: 60 * 60 * 1000,
+      blockMs: 60 * 60 * 1000,
     });
+
+    if (primeiraVisita.ok) {
+      await prisma.listing.update({
+        where: { id },
+        data: { views: { increment: 1 } },
+      });
+    }
   }
 
   const favorited = user

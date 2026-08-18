@@ -66,12 +66,39 @@ export function resetRateLimit(key: string): void {
 }
 
 /**
- * IP do cliente. Atras de proxy confiavel usa x-forwarded-for.
- * Cai para "local" quando indisponivel — o limite ainda vale por e-mail.
+ * IP do cliente, usado como chave de quase todo limite deste projeto.
+ *
+ * `x-forwarded-for` é um cabeçalho comum de requisição: qualquer cliente pode
+ * enviá-lo. Confiar nele sem mais nada significa que basta variar o valor a
+ * cada tentativa para nunca esbarrar em limite nenhum.
+ *
+ * Na Vercel isso não acontece porque a borda reescreve `x-forwarded-for` e
+ * publica `x-vercel-forwarded-for`, que o cliente não controla — por isso o
+ * cabeçalho da plataforma vem primeiro. Fora dela, só confiamos no
+ * encaminhado se a aplicação declarar que está atrás de um proxy confiável,
+ * via TRUST_PROXY_HEADERS=1. Sem essa declaração, cai para uma chave fixa:
+ * o limite fica global em vez de por IP — mais restritivo, nunca mais frouxo.
  */
 export async function clientIp(): Promise<string> {
   const h = await headers();
-  const forwarded = h.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0]!.trim();
-  return h.get("x-real-ip") ?? "local";
+
+  // Definido pela borda da Vercel; não pode ser forjado pelo cliente.
+  const vercel = h.get("x-vercel-forwarded-for");
+  if (vercel) return vercel.split(",")[0]!.trim();
+
+  // Em desenvolvimento não há borda na frente, e uma chave única faria todo
+  // limite virar global — oito tentativas de login por quinze minutos para a
+  // máquina inteira, inviabilizando qualquer teste.
+  const confiaNoEncaminhado =
+    process.env.TRUST_PROXY_HEADERS === "1" || process.env.NODE_ENV !== "production";
+
+  if (confiaNoEncaminhado) {
+    const forwarded = h.get("x-forwarded-for");
+    if (forwarded) return forwarded.split(",")[0]!.trim();
+
+    const real = h.get("x-real-ip");
+    if (real) return real.trim();
+  }
+
+  return "sem-proxy-confiavel";
 }
