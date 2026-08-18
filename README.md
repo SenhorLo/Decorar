@@ -154,7 +154,26 @@ Cada item abaixo está implementado, não é planejamento.
 
 - Rate limit por IP e por e-mail no login, no cadastro, na troca de senha e no
   upload (`src/lib/rate-limit.ts`).
-- Telefone do vendedor só é renderizado após clique explícito.
+- No login o contador por e-mail só é consumido **depois** de a senha falhar.
+  Cobrá-lo antes permitia negação de serviço dirigida: conhecendo o e-mail de
+  alguém, bastava errar a senha algumas vezes para trancar a conta do dono.
+- A chave de IP vem de `x-vercel-forwarded-for` (escrita pela borda). O
+  `x-forwarded-for` só é aceito com `TRUST_PROXY_HEADERS=1`, porque é um
+  cabeçalho que o próprio cliente pode enviar — confiar nele sem proxy na
+  frente anularia todos os limites.
+- Visualizações contam no máximo uma vez por hora por IP, senão a ordenação
+  "Mais vistos" viraria um placar manipulável.
+
+**Dados pessoais de terceiros**
+
+- O telefone do vendedor **nunca acompanha a página**. A consulta do anúncio
+  não seleciona o campo, porque o resultado é serializado no payload RSC e
+  ficaria legível no código-fonte mesmo sem nenhum componente renderizá-lo.
+- O número vem de `revealContactAction`: exige sessão, só responde para
+  anúncio ativo e limita a 40 consultas por hora por usuário. Coletar os
+  contatos do acervo exige uma requisição autenticada por anúncio.
+- Consultas de páginas públicas usam `select` explícito em vez de `include`,
+  para que um campo sensível não entre no payload por descuido.
 
 **Cabeçalhos** (`next.config.mjs`)
 
